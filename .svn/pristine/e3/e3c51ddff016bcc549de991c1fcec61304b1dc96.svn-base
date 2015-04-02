@@ -1,0 +1,41 @@
+﻿Build started 2014/11/30 23:48:15.
+     1>Project "C:\Users\sc\Documents\Visual Studio 2013\Projects\newSBE_basic\newSBE\newSBE.vcxproj" on node 2 (Build target(s)).
+     1>ClCompile:
+         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\CL.exe /c /IC:\opencv\build\include\opencv2 /IC:\opencv\build\include\opencv /IC:\opencv\build\include /ZI /nologo /W3 /WX- /sdl /Od /Oy- /D WIN32 /D _DEBUG /D _CONSOLE /D _LIB /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc120.pdb" /Gd /TP /analyze- /errorReport:prompt SBE.cpp
+         SBE.cpp
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(82): warning C4018: '<' : signed/unsigned mismatch
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(192): warning C4244: 'initializing' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(205): warning C4244: 'initializing' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(207): warning C4244: 'initializing' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(252): warning C4018: '<' : signed/unsigned mismatch
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(270): warning C4244: '+=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(271): warning C4244: '+=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(272): warning C4244: '+=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(273): warning C4244: '+=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(274): warning C4244: '+=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(275): warning C4244: '+=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(341): warning C4244: 'initializing' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(369): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(370): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(371): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(372): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(373): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(374): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(375): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(376): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(377): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(389): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(390): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(391): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(392): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(393): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe_basic\newsbe\sbe.cpp(394): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+       Link:
+         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Users\sc\Documents\Visual Studio 2013\Projects\newSBE_basic\Debug\newSBE.exe" /INCREMENTAL /NOLOGO /LIBPATH:C:\opencv\build\x86\vc12\lib opencv_core249d.lib opencv_imgproc249d.lib opencv_highgui249d.lib opencv_ml249d.lib opencv_video249d.lib opencv_features2d249d.lib opencv_calib3d249d.lib opencv_objdetect249d.lib opencv_contrib249d.lib opencv_legacy249d.lib opencv_flann249d.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:\Users\sc\Documents\Visual Studio 2013\Projects\newSBE_basic\Debug\newSBE.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"C:\Users\sc\Documents\Visual Studio 2013\Projects\newSBE_basic\Debug\newSBE.lib" /MACHINE:X86 Debug\main.obj
+         Debug\SBE.obj
+         newSBE.vcxproj -> C:\Users\sc\Documents\Visual Studio 2013\Projects\newSBE_basic\Debug\newSBE.exe
+     1>Done Building Project "C:\Users\sc\Documents\Visual Studio 2013\Projects\newSBE_basic\newSBE\newSBE.vcxproj" (Build target(s)).
+
+Build succeeded.
+
+Time Elapsed 00:00:01.62

@@ -1,0 +1,102 @@
+﻿#include <opencv2/opencv.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/objdetect/objdetect.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/core/core.hpp>
+
+#include <iostream>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string>
+#include <math.h>
+#include <direct.h>
+#include <fstream>
+#include "ml.h"
+#include <utility>
+#include <list>
+#include <io.h>
+
+#include "SBE.h"
+
+using namespace std;
+using namespace cv;
+
+// load all image names
+void __getAllFileNames(string path, vector<string>& files)
+{
+	long		hFile = 0;
+	struct		_finddata_t fileinfo;
+	string		p;
+
+	if ((hFile = _findfirst(p.assign(path).append("\\*").c_str(), &fileinfo)) != -1)
+	{
+		do
+		{
+			if ((fileinfo.attrib &  _A_SUBDIR))  //比较文件类型是否是文件夹
+			{
+				if (strcmp(fileinfo.name, ".") != 0 && strcmp(fileinfo.name, "..") != 0)
+				{
+					files.push_back(p.assign(path).append("\\").append(fileinfo.name));
+					__getAllFileNames(p.assign(path).append("\\").append(fileinfo.name), files);
+				}
+			}
+			else
+			{
+				files.push_back(p.assign(path).append("\\").append(fileinfo.name));
+			}
+		} while (_findnext(hFile, &fileinfo) == 0);  //寻找下一个，成功返回0，否则-1
+		_findclose(hFile);
+	}
+}
+
+void __getAllImages(vector<string> *filenames, vector<Mat> *images){
+
+	for (vector<string>::iterator it = filenames->begin(); it != filenames->end(); ++it)
+	{
+		Mat temp = imread(*it);
+		images->push_back(temp);
+	}
+
+}
+
+void getImages(string path, vector<Mat> *images){
+
+	vector<string>	imagenames;
+
+	__getAllFileNames(path, imagenames);
+	__getAllImages(&imagenames, images);
+
+}
+
+int main(){
+
+	int initialNumber = 100;
+
+	// get images
+	vector<Mat>		images;
+	getImages("C:\\testImages\\Perception\\Curtain", &images);
+	//getImages("C:\\testImages\\Perception\\Escalator", &images);
+	//getImages("C:\\testImages\\Wallflower\\WavingTrees", &images);
+	//getImages("C:\\testImages\\Perception\\Campus", &images);
+	//getImages("C:\\testImages\\Perception\\WaterSurface", &images);
+
+	// initial SBE
+	int rs = images.at(0).rows;
+	int cs = images.at(0).cols;
+	SBE newSBE(rs,cs);
+
+	// detect by SBE
+	Mat result;
+	for (int i = 0; i < images.size(); i++){
+		float TimeA = getTickCount();
+		result = newSBE.Run(images[i]);		// STEP 3 : detect by background.
+		float TimeB = getTickCount();
+		cout << " Detect Time: " << (TimeB - TimeA) / getTickFrequency() << endl;
+		imshow("result", result);
+		imshow("image", images[i]);
+		waitKey(100);
+	}
+
+	return 0;
+}
+

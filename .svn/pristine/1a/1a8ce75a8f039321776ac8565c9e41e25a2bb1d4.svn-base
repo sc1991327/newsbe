@@ -1,0 +1,87 @@
+#include <opencv2/opencv.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/objdetect/objdetect.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/core/core.hpp>
+
+#include <vector>
+using std::vector;
+
+#define NEIGHBOR_R 2
+#define NEIGHBOR_N 8
+#define ELLIPSOID_MAXPOINTS 8
+
+using namespace std;
+using namespace cv;
+
+// the base structure for each pixel
+// RGB and Ellipsoid data store independent
+
+// for pixel
+struct structCodeword
+{
+	Vec3d	value;
+	int		ellipsoid;	// store the number of ellipsoid for the pixel, -1:Non(only initial) ; store ellipsoid index for this pixel
+};
+
+struct structEllipsoid
+{
+	Matx13d		m;		// mu
+	Matx13d		v;		// variance
+	Matx33d		pd;		// eigenvectors
+	// axis
+	float		a;
+	float		b;
+	float		c;
+	// store the points calculate the ellipsoid
+	int			num;
+	int			codeword[ELLIPSOID_MAXPOINTS * 2];		// 4-16 to create a ellipsoid, over to split. store codeword index for this pixel
+};
+
+class SBE
+{
+public:
+	SBE(int img_rows, int img_cols);
+	~SBE();
+
+	// for image
+	void InitialBackground(Mat image);
+	Mat DetectBackground(Mat image);	// return result image
+
+private:
+	int imgRols, imgCols;
+	int rnd10[7433];	// choose which codeword in the neighbor
+	int rndn[7433];		// choose which neighbor
+	int rndNum;
+	vector<Vec2f> neighborposoffset;
+
+	// core data structure
+	vector< vector <structCodeword> >	codevolume;
+	vector< vector<structEllipsoid> >	codeellipsoid;
+
+	// for pixel
+	// - IsBackground() return -2: not in any ellipsoid; -1: not have ellipsoid; 0-N: in n ellipsoid.
+	// - for the next only update the relation ellipsoid.
+	inline int IsBackground(vector<structEllipsoid> &codeellipsoid, Vec3d pixel);
+	inline void UpdateBackground(vector<vector<structCodeword>> &codevolume, vector< vector<structEllipsoid> > &codeellipsoid,
+		int ellipsoidindex, vector<Vec2f> &neighborposoffset, int pos, int imgi, int imgj, Vec3d pixeldata);			// update codevolume only
+	inline int AddCodeword(vector<vector<structCodeword>> &codevolume, vector< vector<structEllipsoid> > &codeellipsoid,
+		int ellipsoidindex, int pos, Vec3d pixeldata);	// return the ellipsoid index which need to update, -1 means not to update.
+	inline void AddNeighborCodeword(vector<vector<structCodeword>> &codevolume, vector< vector<structEllipsoid> > &codeellipsoid, int pos, Vec3d pixeldata);
+	inline bool UpdateEllipsoid(vector<vector<structCodeword>> &codevolume, vector< vector<structEllipsoid> > &codeellipsoid, int pos, int ellipsoidIdx);	// update codeellipsoid when all codevolume update finish.
+	inline bool SplitEllipsoid(vector<vector<structCodeword>> &codevolume, vector< vector<structEllipsoid> > &codeellipsoid, int pos, int ellipsoidIdx);
+	inline bool MustSplitEllipsoid(vector<vector<structCodeword>> &codevolume, vector< vector<structEllipsoid> > &codeellipsoid, int pos, int ellipsoidIdx);
+
+	inline bool CreateCodebook(Mat &image, vector<vector<structCodeword>> &codevolume, vector<Vec2f> &neighborposoffset, int pixel, int i, int j);
+	inline bool CreateEllipsoid(vector<vector<structCodeword>> &codevolume, vector< vector<structEllipsoid> > &codeellipsoid, int pixel);
+	inline bool CreateCombine(vector<vector<structCodeword>> &codevolume, int pixel);
+
+	inline void CalcEllipsoid(vector<structCodeword> &codevolume, structEllipsoid &codeellipsoid);
+
+	// Tools
+	inline Vec3d GetVariance(vector<Vec3d> &data, Vec3d mu);
+	inline void GetNeighborPos(int r, int n, vector<Vec2f> &npoint);
+	inline Vec3d GetNeighborValueFromImage(Mat &image, Vec2f npoint, int i, int j);
+	inline int GetFastRandom(int ssize);
+
+};

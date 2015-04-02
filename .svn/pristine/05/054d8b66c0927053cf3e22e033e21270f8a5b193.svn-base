@@ -1,0 +1,50 @@
+﻿Build started 2014/11/13 14:01:16.
+     1>Project "C:\Users\sc\Documents\Visual Studio 2013\Projects\newSBE\newSBE\newSBE.vcxproj" on node 2 (Build target(s)).
+     1>ClCompile:
+         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\CL.exe /c /IC:\opencv\build\include\opencv2 /IC:\opencv\build\include\opencv /IC:\opencv\build\include /ZI /nologo /W3 /WX- /sdl /Od /Oy- /D WIN32 /D _DEBUG /D _CONSOLE /D _LIB /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc120.pdb" /Gd /TP /analyze- /errorReport:prompt SBE.cpp
+         SBE.cpp
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(141): warning C4244: 'argument' : conversion from 'double' to 'unsigned int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(141): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(142): warning C4244: 'argument' : conversion from 'double' to 'unsigned int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(142): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(144): warning C4244: 'argument' : conversion from 'double' to 'unsigned int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(144): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(145): warning C4244: 'argument' : conversion from 'double' to 'unsigned int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(145): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(147): warning C4244: 'argument' : conversion from 'double' to 'unsigned int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(147): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(148): warning C4244: 'argument' : conversion from 'double' to 'unsigned int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(148): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(150): warning C4244: 'argument' : conversion from 'double' to 'unsigned int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(150): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(151): warning C4244: 'argument' : conversion from 'double' to 'unsigned int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(151): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(179): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(180): warning C4244: '=' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(239): warning C4244: 'initializing' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(291): warning C4018: '<' : signed/unsigned mismatch
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(455): warning C4305: 'initializing' : truncation from 'double' to 'float'
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(456): warning C4305: 'initializing' : truncation from 'double' to 'float'
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(461): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(462): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(463): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(490): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(491): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(492): warning C4244: '=' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(549): warning C4018: '<' : signed/unsigned mismatch
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(573): warning C4554: '<<' : check operator precedence for possible error; use parentheses to clarify precedence
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(585): warning C4554: '<<' : check operator precedence for possible error; use parentheses to clarify precedence
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(603): warning C4244: 'initializing' : conversion from 'double' to 'float', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(616): warning C4244: 'initializing' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(617): warning C4244: 'initializing' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(618): warning C4244: 'initializing' : conversion from 'float' to 'int', possible loss of data
+     1>c:\users\sc\documents\visual studio 2013\projects\newsbe\newsbe\sbe.cpp(619): warning C4244: 'initializing' : conversion from 'float' to 'int', possible loss of data
+       Link:
+         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Users\sc\Documents\Visual Studio 2013\Projects\newSBE\Debug\newSBE.exe" /INCREMENTAL /NOLOGO /LIBPATH:C:\opencv\build\x86\vc12\lib opencv_core249d.lib opencv_imgproc249d.lib opencv_highgui249d.lib opencv_ml249d.lib opencv_video249d.lib opencv_features2d249d.lib opencv_calib3d249d.lib opencv_objdetect249d.lib opencv_contrib249d.lib opencv_legacy249d.lib opencv_flann249d.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:\Users\sc\Documents\Visual Studio 2013\Projects\newSBE\Debug\newSBE.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"C:\Users\sc\Documents\Visual Studio 2013\Projects\newSBE\Debug\newSBE.lib" /MACHINE:X86 Debug\main.obj
+         Debug\SBE.obj
+         newSBE.vcxproj -> C:\Users\sc\Documents\Visual Studio 2013\Projects\newSBE\Debug\newSBE.exe
+     1>Done Building Project "C:\Users\sc\Documents\Visual Studio 2013\Projects\newSBE\newSBE\newSBE.vcxproj" (Build target(s)).
+
+Build succeeded.
+
+Time Elapsed 00:00:01.98

@@ -1,0 +1,710 @@
+﻿#include <opencv2/opencv.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/objdetect/objdetect.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/core/core.hpp>
+
+#include <iostream>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string>
+#include <math.h>
+#include <direct.h>
+#include <fstream>
+#include "ml.h"
+#include <utility>
+#include <list>
+#include <io.h>
+#include <time.h>
+
+#include "SBE.h"
+
+#define ELLIPSOID_SIGMA 3
+#define VOLUME_SIZE 1	// only combine the same point.
+
+using namespace std;
+using namespace cv;
+
+SBE::SBE(int img_rows, int img_cols)
+{
+	imgRols = img_rows;
+	imgCols = img_cols;
+	for (int i = 0; i < imgRols * imgCols; i++)
+	{
+		codevolume.push_back(vector<structCodeword>());
+		codeellipsoid.push_back(vector<structEllipsoid>());
+	}
+
+	// initial rand
+	rndNum = 0;
+	for (int i = 0; i < 7433; i++)
+	{
+		rndn[i] = rand() % NEIGHBOR_N;
+		rnd10[i] = rand() % 10;
+	}
+
+	GetNeighborPos(NEIGHBOR_R, NEIGHBOR_N, neighborposoffset);
+}
+
+SBE::~SBE()
+{
+
+}
+
+// --------- Public --------------------------------------
+
+void SBE::InitialBackground(Mat image){
+
+	for (int i = 0; i < image.rows; i++) {
+		for (int j = 0; j < image.cols; j++) {
+			
+			int pixel = i * image.cols + j;
+
+			// create codebook for each pixel
+			// -- here initial codevolume.value and set codevolume.ellipsoid = -1;
+			CreateCodebook(image, codevolume, neighborposoffset, pixel, i, j);
+
+			// combine codeword for each codebook
+			CreateCombine(codevolume, pixel);			// only combine the same point
+
+			// calculate ellipsoid for each pixel
+			// -- if pixel have not ellipsoid, use it's codevolume.value to create 
+			// -- [ here may be create ellipsoid failed. so, in update also need to check the pixel have ellipsoid or not, is not must need to test create ]
+			CreateEllipsoid(codevolume, codeellipsoid, pixel);
+
+		}
+	}
+
+}
+
+Mat SBE::DetectBackground(Mat image){
+
+	Mat image_result = Mat::zeros(imgRols,imgCols,CV_8UC1);
+
+	// for each pixel
+	//float TimeA = getTickCount();
+	for (int i = 0; i < imgRols; i++) {
+		for (int j = 0; j < imgCols; j++) {
+
+			int pixel = i * image.cols + j;
+
+			// judge for all ellipsoid for each pixel.
+			int isb = IsBackground(codeellipsoid.at(pixel), (Vec3d)image.at<Vec3b>(i, j));
+			if ( isb >= 0 ){
+				// is background
+				image_result.at<unsigned char>(i, j) = 0;
+				// update background model
+				// - here add a pixel to codevolume
+				// - here only change a ellipsoid and then check split it or not.
+				UpdateBackground(codevolume, codeellipsoid, isb, neighborposoffset, pixel, i, j, (Vec3d)image.at<Vec3b>(i, j));
+			}
+			else if( isb == -1 ){
+				// not have ellipsoid
+				image_result.at<unsigned char>(i, j) = 0;
+				// add the point and try to create a ellipsoid
+				structCodeword temp;
+				temp.value = (Vec3d)image.at<Vec3b>(i, j);
+				temp.ellipsoid = -1;
+				codevolume[pixel].push_back(temp);
+				CreateCombine(codevolume, pixel);			// only combine the same point
+				CreateEllipsoid(codevolume, codeellipsoid, pixel);
+			}
+			else{
+				// not in any ellipsoid
+				image_result.at<unsigned char>(i, j) = 255;
+				// here need not to do anything
+			}
+		}
+	}
+
+	return image_result;
+}
+
+// --------- Private --------------------------------------
+
+void SBE::UpdateBackground(vector<vector<structCodeword>> &codevolume, vector<vector<structEllipsoid>> &codeellipsoid, 
+	int ellipsoidindex, vector<Vec2f> &neighborposoffset, int pos, int imgi, int imgj, Vec3d pixeldata){
+
+	// update myself
+	// -- here need to know that updateEllipsoid and the addCodeword appear at the same time
+	// -- addCodeword change the codevolume data
+	// -- updateEllipsoid change the codeellipsoid data
+	int elidx;
+	elidx = AddCodeword(codevolume, codeellipsoid, ellipsoidindex, pos, pixeldata);
+	UpdateEllipsoid(codevolume, codeellipsoid, pos, elidx);
+
+	// update from neighbor
+	int ri_1, ri_2, ri_3, ri_4, rj_1, rj_2, rj_3, rj_4;
+	do {
+		int rn = rndn[rndNum % 7433];
+		rndNum++;
+		ri_1 = neighborposoffset[floor(rn)][0];
+		rj_1 = neighborposoffset[floor(rn)][1];
+
+		ri_2 = neighborposoffset[floor(rn)][0];
+		rj_2 = neighborposoffset[ceil(rn)][1];
+
+		ri_3 = neighborposoffset[ceil(rn)][0];
+		rj_3 = neighborposoffset[floor(rn)][1];
+
+		ri_4 = neighborposoffset[ceil(rn)][0];
+		rj_4 = neighborposoffset[ceil(rn)][1];
+	} while ((imgi + ri_1) < 0 || (imgi + ri_4) >= imgRols || (imgj + rj_1) < 0 || (imgj+ rj_4) >= imgCols);
+
+	int nei_pos_1 = (imgi + ri_1)*imgCols + (imgj + rj_1);
+	int nei_pos_2 = (imgi + ri_2)*imgCols + (imgj + rj_2);
+	int nei_pos_3 = (imgi + ri_3)*imgCols + (imgj + rj_3);
+	int nei_pos_4 = (imgi + ri_4)*imgCols + (imgj + rj_4);
+
+	int rw_1 = GetFastRandom(codevolume[nei_pos_1].size());
+	int rw_2 = GetFastRandom(codevolume[nei_pos_2].size());
+	int rw_3 = GetFastRandom(codevolume[nei_pos_3].size());
+	int rw_4 = GetFastRandom(codevolume[nei_pos_4].size());
+
+	Vec3d temp = codevolume[nei_pos_1][rw_1].value * 0.25;
+	temp += codevolume[nei_pos_2][rw_2].value * 0.25;
+	temp += codevolume[nei_pos_3][rw_3].value * 0.25;
+	temp += codevolume[nei_pos_4][rw_4].value * 0.25;
+
+	// above all to calculate structcodeword.value; structcodeword.ellipsoid calculate by AddNeighborCodeword
+	// then AddNeighborCodeword call AddCodeword put the structcodeword in codevolume.
+	AddNeighborCodeword(codevolume, codeellipsoid, pos, temp);
+
+	// update to neighbor
+	int ri, rj;
+	do
+	{
+		int rn = rndn[rndNum % 7433];
+		rndNum++;
+		ri = neighborposoffset[(int)rn][0];
+		rj = neighborposoffset[(int)rn][1];
+	} while ((imgi + ri) < 0 || (imgi + ri) >= imgRols || (imgj + rj) < 0 || (imgj + rj) >= imgCols);
+
+	int nei_pos = (imgi + ri)*imgCols + (imgj + rj);
+	int rw = GetFastRandom(codevolume[pos].size());
+	temp = codevolume[pos][rw].value;
+	AddNeighborCodeword(codevolume, codeellipsoid, nei_pos, temp);
+
+}
+
+bool SBE::UpdateEllipsoid(vector<vector<structCodeword>> &codevolume, vector< vector<structEllipsoid> > &codeellipsoid, int pos, int ellipsoidIdx){
+
+	// recalculate the ellipsoid
+	structEllipsoid se = codeellipsoid[pos][ellipsoidIdx];
+	// input data - all structellipsoid.codeword data.
+	CalcEllipsoid(codevolume[pos], se);
+
+	// calculate dispersion
+	Mat v = Mat(se.v);
+	Mat m = Mat(se.m);
+	Vec3d dist;
+	dist[0] = v.at<double>(0) / m.at<double>(0);
+	dist[1] = v.at<double>(1) / m.at<double>(1);
+	dist[2] = v.at<double>(2) / m.at<double>(2);
+
+	// too disperse to split
+	if (dist[0] > 0.8 && dist[1] > 0.8 && dist[2] > 0.8){
+		
+		// split ellipsoid or not
+		SplitEllipsoid(codevolume, codeellipsoid, pos, ellipsoidIdx);
+
+	}
+
+	// too much points to split
+	if (codeellipsoid[pos][ellipsoidIdx].num >= ELLIPSOID_MAXPOINTS * 2){
+
+		MustSplitEllipsoid(codevolume, codeellipsoid, pos, ellipsoidIdx);
+
+	}
+
+	return true;
+}
+
+int SBE::IsBackground(vector<structEllipsoid> &codeellipsoid, Vec3d pixel){
+
+	// judge the pixel point is in a ellipsoid or not
+
+	int ss = codeellipsoid.size();
+	// not have ellipsoid
+	if ( ss == 0)
+		return -1;
+
+	// for each ellipsoid
+	for (int i = 0; i < ss; i++)
+	{
+		Matx13d p = { pixel[0], pixel[1], pixel[2] };
+
+		Matx13d tempp, localpixel;
+		Matx33d temp, temppd;
+		subtract(p, codeellipsoid[i].m, tempp); // tempp: 1*3
+		transpose(codeellipsoid[i].pd, temp);   // temppd: 3*3
+		invert(temp, temppd);
+		localpixel = tempp * temppd;  // A / B = A * inv(B)
+
+		Vec3d tt = (Vec3d)localpixel.val;
+		float dis = sqrt((tt[0] / codeellipsoid[i].a) * (tt[0] / codeellipsoid[i].a) +
+			(tt[1] / codeellipsoid[i].b) * (tt[1] / codeellipsoid[i].b) +
+			(tt[2] / codeellipsoid[i].c) * (tt[2] / codeellipsoid[i].c));
+
+		// in the ellipsoid
+		if (dis <= 1)
+			return i;
+	}
+
+	// not in any ellipsoid
+	return -2;
+}
+
+void SBE::AddNeighborCodeword(vector<vector<structCodeword>> &codevolume, vector< vector<structEllipsoid> > &codeellipsoid, int pos, Vec3d pixeldata){
+
+	// first need to calculate the min distance from a ellipsoid and the point.
+	// then put the point to codevolume
+	int ss = codeellipsoid[pos].size();
+	if ( ss > 1 )
+	{
+		// multi-ellipsoid
+		Mat temp = Mat(codeellipsoid[pos][0].m);
+		int idx = 0;
+		double dist = sqrt((temp.at<double>(0) - pixeldata[0]) * (temp.at<double>(0) - pixeldata[0]) +
+			(temp.at<double>(1) - pixeldata[1]) * (temp.at<double>(1) - pixeldata[1]) +
+			(temp.at<double>(2) - pixeldata[2]) * (temp.at<double>(2) - pixeldata[2]));
+		
+		for (int i = 1; i < ss; i++){	// for find the min distance
+			temp = Mat(codeellipsoid[pos][i].m);
+			double dtemp = sqrt((temp.at<double>(0) - pixeldata[0]) * (temp.at<double>(0) - pixeldata[0]) +
+				(temp.at<double>(1) - pixeldata[1]) * (temp.at<double>(1) - pixeldata[1]) +
+				(temp.at<double>(2) - pixeldata[2]) * (temp.at<double>(2) - pixeldata[2]));
+			if (dist >= dtemp)
+				idx = i;
+		}
+
+
+		int elidx = AddCodeword(codevolume, codeellipsoid, idx, pos, pixeldata);
+		UpdateEllipsoid(codevolume, codeellipsoid, pos, elidx);
+	} 
+	else
+	{
+		// only one ellipsoid
+		int elidx = AddCodeword(codevolume, codeellipsoid, 0, pos, pixeldata);
+		UpdateEllipsoid(codevolume, codeellipsoid, pos, elidx);
+	}
+
+}
+
+int SBE::AddCodeword(vector<vector<structCodeword>> &codevolume, vector< vector<structEllipsoid> > &codeellipsoid, int ellipsoidindex, int pos, Vec3d pixeldata){
+
+	// compare and combine
+	// if combine only update the combine ellipsoid next
+	Vec3i a = (Vec3i)(pixeldata * VOLUME_SIZE);
+	for (int i = 0; i < codevolume[pos].size(); i++)
+	{
+		Vec3i b = (Vec3i)(codevolume[pos][i].value * VOLUME_SIZE);
+		if (a == b){
+			Vec3d temp = pixeldata * 0.5 + codevolume[pos][i].value * 0.5;
+			codevolume[pos][i].value = temp;
+			return codevolume[pos][i].ellipsoid;
+		}
+	}
+
+	// create new
+	// update the codeellipsoid data - add codeword index
+	int num = codeellipsoid[pos][ellipsoidindex].num;
+	codeellipsoid[pos][ellipsoidindex].codeword[num] = codevolume[pos].size();
+	codeellipsoid[pos][ellipsoidindex].num++;
+	// update codevolume data - add a new codeword
+	structCodeword sc;
+	sc.value = pixeldata;
+	sc.ellipsoid = ellipsoidindex;
+	codevolume[pos].push_back(sc);
+
+	// here return the ellipsoid index number which need to update next.
+	return ellipsoidindex;
+
+}
+
+bool SBE::CreateCodebook(Mat &image, vector<vector<structCodeword>> &codevolume, vector<Vec2f> &neighborposoffset, int pixel, int i, int j){
+
+	int ss = neighborposoffset.size();
+
+	structCodeword temp;
+	temp.value = (Vec3d)image.at<Vec3b>(i, j);
+	temp.ellipsoid = -1;
+	codevolume[pixel].push_back(temp);
+
+	// for each neighbor - only initial structCodeword's value
+	for (int p = 0; p < ss; p++){
+
+		temp.value = GetNeighborValueFromImage(image, neighborposoffset[p], i, j);
+		temp.ellipsoid = -1;
+
+		// only store the legal position data.
+		if (temp.value[0] > 0)
+			codevolume[pixel].push_back(temp);
+
+	}
+	
+	return true;
+}
+
+bool SBE::CreateEllipsoid(vector<vector<structCodeword>> &codevolume, vector< vector<structEllipsoid> > &codeellipsoid, int pixel){
+
+	// here consider the pixel don't have ellipsoid only.
+
+	const int ss = codevolume[pixel].size();
+	if (ss < 4)
+		return false; 
+
+	// create structEllipsoid
+	structEllipsoid el;
+	el.num = ss;
+	for (int i = 0; i < el.num; i++){
+		el.codeword[i] = i;
+	}
+	CalcEllipsoid(codevolume[pixel], el);
+
+	if (el.a == 0 && el.b == 0 && el.c == 0)
+		return false;
+	else{
+		// change codevolume
+		for (int i = 0; i < ss; i++){
+			codevolume[pixel][i].ellipsoid = 0;
+		}
+		// change codeellipsoid
+		codeellipsoid[pixel].push_back(el);		// create the first ellipsoid.
+	}
+
+	return true;
+}
+
+bool SBE::CreateCombine(vector<vector<structCodeword>> &codevolume, int pixel){
+
+	// here the problem is only retain a value for combine. (not combine, store one and delete other)
+
+	vector<structCodeword> temp = codevolume[pixel];
+	int ss = temp.size();
+
+	// initial mark
+	vector<int>	mark;
+	for (int i = 0; i < ss; i++)
+		mark.push_back(-1);
+
+	// marking
+	int n = 1;
+	mark[0] = 0;
+	for (int i = 0; i < ss - 1; i++){
+		
+		if ( mark[i+1] < 0 ){
+			Vec3b tt1, tt2;
+			for (int j = i + 1; j < ss; j++)
+			{
+				tt1 = (Vec3b)(temp[i].value / VOLUME_SIZE);
+				tt2 = (Vec3b)(temp[j].value / VOLUME_SIZE);
+				if (tt1 == tt2){
+					mark[j] = n;
+				}
+			}
+			mark[i+1] = n;
+			n++;
+		}
+
+	}
+
+	// use mark
+	int un = 0;
+	for (int i = 0; i < ss; i++){
+		// stay
+		if (mark[i] == un){
+			Vec3d ttt = codevolume[pixel][i].value;
+			codevolume[pixel][un].value = ttt;
+			un++;
+		}
+	}
+	for (int i = un; i < ss; i++){
+		// erase
+		codevolume[pixel].pop_back();
+	}
+
+	return true;
+
+}
+
+void SBE::CalcEllipsoid(vector<structCodeword> &codevolume, structEllipsoid &codeellipsoid){
+
+	// Here Use the codeEllipsoid.codeword data to fill the other data.
+
+	/*
+	this function has a problem:
+	matlab : cov() && opencv calcCovarMatrix() give the different result.
+	*/
+
+	// prepare data
+	vector<Vec3d> pdata;	
+	int ss = codeellipsoid.num;
+	for (int i = 0; i < ss; i++){
+		int inpos = codeellipsoid.codeword[i];
+		Vec3d singled = codevolume[inpos].value;
+		pdata.push_back(singled);
+	}
+	Mat_<double> samples = Mat(pdata);
+	//Mat_<double> samples = (Mat_<double>(4,3) << 142, 140, 162, 140, 138, 170, 171, 184, 201, 170, 181, 214);
+	//cout << "samples = " << endl << " " << samples << endl << endl;
+
+	Mat cov, mu;
+	calcCovarMatrix(samples, cov, mu, CV_COVAR_NORMAL | CV_COVAR_ROWS);
+	//cout << "cov = " << endl << " " << cov << endl << endl;
+	//cout << "mu = " << endl << " " << mu << endl << endl;
+
+	Mat eigenvalues, eigenvectors;
+	eigen(cov, eigenvalues, eigenvectors);
+	//cout << "eigenvalues = " << endl << " " << eigenvalues << endl << endl;
+	//cout << "eigenvectors = " << endl << " " << eigenvectors << endl << endl;
+
+	// to get a,b,c
+	float phi[3] = { 0, 1.5708, 0 };
+	float theta[3] = { 1.5708, 1.5708, 0 };
+	float elv[3][3];
+	for (int i = 0; i < 3; i++)
+	{
+		float temp = 0;
+		elv[i][0] = (cos(phi[i]) * sin(theta[i]) * sqrt(eigenvalues.at<double>(0, 0))) * ELLIPSOID_SIGMA;
+		elv[i][1] = (sin(phi[i]) * sin(theta[i]) * sqrt(eigenvalues.at<double>(1, 0))) * ELLIPSOID_SIGMA;
+		elv[i][2] = (cos(theta[i]) * sqrt(eigenvalues.at<double>(2, 0))) * ELLIPSOID_SIGMA;
+	}
+
+	Vec3d tempp = GetVariance(pdata, Vec3d(mu));
+	Mat temp = Mat(tempp).t();
+
+	// return data
+	codeellipsoid.m = mu;
+	codeellipsoid.v = temp;
+	codeellipsoid.pd = eigenvectors;
+	codeellipsoid.a = (elv[0][0] * 2);
+	codeellipsoid.b = (elv[1][1] * 2);
+	codeellipsoid.c = (elv[2][2] * 2);
+
+}
+
+bool SBE::SplitEllipsoid(vector<vector<structCodeword>> &codevolume, vector< vector<structEllipsoid> > &codeellipsoid, int pos, int ellipsoidIdx){
+
+	// input vector<structCodeword> by n size and return it by n+1 size
+	
+	// get all data from codeEllipsoid.codeword - the point only in this ellipsoid
+	int ss = codeellipsoid[pos][ellipsoidIdx].num;
+	Mat datas(ss, 1, CV_32FC3);		// input mat
+	Mat labels;						// output
+	Mat centers(2, 1, datas.type());
+	for (int i = 0; i < ss; i++){
+		int temp = codeellipsoid[pos][ellipsoidIdx].codeword[i];
+		datas.at<float>(i, 0) = codevolume[pos][temp].value[0];
+		datas.at<float>(i, 1) = codevolume[pos][temp].value[1];
+		datas.at<float>(i, 2) = codevolume[pos][temp].value[2];
+	}
+
+	// k-mean
+	kmeans(datas, 2, labels, TermCriteria(CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 10, 1.0), 3, KMEANS_PP_CENTERS, centers);
+	//cout << "labels = " << endl << " " << labels << endl << endl;
+
+	int tempnum = 0;
+	for (int i = 0; i < ss; i++){
+		if (labels.at<int>(i) == 0)
+			tempnum++;
+	}
+	if (tempnum < 4 || ss - tempnum < 4)
+		return false;
+
+	// result
+	vector<Vec3d> newd1, newd2;
+	structEllipsoid newse1, newse2;
+	newse1.num = 0;
+	newse2.num = 0;
+
+	// - change the codeword.ellipsoid data
+	// for each old index number
+	for (int i = 0; i < ss; i++){
+
+		int temp = codeellipsoid[pos][ellipsoidIdx].codeword[i];	// each index number
+		if (labels.at<int>(i) != 0){
+			// to the new ellipsoid
+			codevolume[pos][temp].ellipsoid = codeellipsoid[pos].size();	// point to the new ellipsoid - codevolume
+			newse2.codeword[newse2.num] = temp;		// translate index number
+			newse2.num++;
+		}
+		else{
+			// to the extend ellipsoid
+			newse1.codeword[newse1.num] = temp;		// translate index number
+			newse1.num++;
+		}
+	}
+
+	// - recalculate the ellipsoid
+	CalcEllipsoid(codevolume[pos], newse1);
+	CalcEllipsoid(codevolume[pos], newse2);
+
+	// update codeEllipsoid
+	vector<structEllipsoid> ttt = codeellipsoid[pos];
+	codeellipsoid[pos][ellipsoidIdx] = newse1;
+	codeellipsoid[pos].push_back(newse2);
+
+	return true;
+}
+
+bool SBE::MustSplitEllipsoid(vector<vector<structCodeword>> &codevolume, vector< vector<structEllipsoid> > &codeellipsoid, int pos, int ellipsoidIdx){
+
+	// input vector<structCodeword> by n size and return it by n+1 size
+
+	int ss = codeellipsoid[pos][ellipsoidIdx].num;
+	vector<Vec3d> newd1, newd2;
+	structEllipsoid newse1, newse2;
+	newse1.num = 0;
+	newse2.num = 0;
+
+	// - change the codeword.ellipsoid data
+	// for each old index number
+	for (int i = 0; i < ELLIPSOID_MAXPOINTS; i++){
+
+		int temp = codeellipsoid[pos][ellipsoidIdx].codeword[i];	// each index number
+		// to the new ellipsoid
+		codevolume[pos][temp].ellipsoid = codeellipsoid[pos].size();	// point to the new ellipsoid - codevolume
+		newse2.codeword[newse2.num] = temp;		// translate index number
+		newse2.num++;
+		
+	}
+
+	for (int i = ELLIPSOID_MAXPOINTS; i < ss; i++){
+
+		int temp = codeellipsoid[pos][ellipsoidIdx].codeword[i];	// each index number
+		// to the extend ellipsoid
+		newse1.codeword[newse1.num] = temp;		// translate index number
+		newse1.num++;
+	}
+
+	// - recalculate the ellipsoid
+	CalcEllipsoid(codevolume[pos], newse1);
+	CalcEllipsoid(codevolume[pos], newse2);
+
+	// update codeEllipsoid
+	codeellipsoid[pos][ellipsoidIdx] = newse1;
+	codeellipsoid[pos].push_back(newse2);
+
+	return true;
+
+}
+
+Vec3d SBE::GetVariance(vector<Vec3d> &data, Vec3d mu){
+
+	// for each channel
+	Vec3d res;
+	for (int c = 0; c < 3; c++)
+	{
+		double dist = 0;
+		for (int i = 0; i < data.size(); i++){
+			dist += (data[i][c] - mu[c]) * (data[i][c] - mu[c]);
+		}
+		res[c] = sqrt(dist);
+	}
+
+	return res;
+}
+
+int SBE::GetFastRandom(int ssize){
+
+	int rw3, rw2, rw1;
+	int pos;
+	
+	if ( (ssize / 100) >= 1 )
+	{
+		do 
+		{
+			rw3 = rnd10[rndNum % 7433];
+			rndNum++;
+			rw2 = rnd10[rndNum % 7433];
+			rndNum++;
+			rw1 = rnd10[rndNum % 7433];
+			rndNum++;
+			pos = rw1 + rw2 << 1 + rw3 << 2;
+		} while (pos >= ssize);
+
+	}
+	else if ( (ssize / 10) >=1 )
+	{
+		do
+		{
+			rw2 = rnd10[rndNum % 7433];
+			rndNum++;
+			rw1 = rnd10[rndNum % 7433];
+			rndNum++;
+			pos = rw1 + rw2 << 1;
+		} while (pos >= ssize);
+	}
+	else
+	{
+		do
+		{
+			rw1 = rnd10[rndNum % 7433];
+			rndNum++;
+			pos = rw1;
+		} while (pos >= ssize);
+	}
+
+	return pos;
+}
+
+void SBE::GetNeighborPos(int r, int n, vector<Vec2f> &npointoffset){
+
+	float perangle = 6.2832 / n;
+
+	// for each point
+	for (int i = 0; i < n; i++){
+		float px = r * sin(perangle * i);
+		float py = r * cos(perangle * i);
+		npointoffset.push_back(Vec2f(px, py));
+	}
+
+}
+
+Vec3d SBE::GetNeighborValueFromImage(Mat &image, Vec2f npoint, int i, int j){
+
+	int i_floor = floor(npoint[0]);
+	int j_floor = floor(npoint[1]);
+	int i_ceil = ceil(npoint[0]);
+	int j_ceil = ceil(npoint[1]);
+
+	// for point
+	int ni_1 = i + i_floor;
+	int nj_1 = j + j_floor;
+
+	int ni_2 = i + i_floor;
+	int nj_2 = j + j_ceil;
+
+	int ni_3 = i + i_ceil;
+	int nj_3 = j + j_floor;
+
+	int ni_4 = i + i_ceil;
+	int nj_4 = j + j_ceil;
+
+	// get data
+	int n = 0;
+	Vec3d res = Vec3d(0, 0, 0);
+	if (ni_1 >= 0 && ni_1 < imgRols && nj_1 >= 0 && nj_1 < imgCols){
+		res += (Vec3d)image.at<Vec3b>(ni_1, nj_1);
+		n++;
+	}
+	if (ni_2 >= 0 && ni_2 < imgRols && nj_2 >= 0 && nj_2 < imgCols){
+		res += (Vec3d)image.at<Vec3b>(ni_2, nj_2);
+		n++;
+	}
+	if (ni_3 >= 0 && ni_3 < imgRols && nj_3 >= 0 && nj_3 < imgCols){
+		res += (Vec3d)image.at<Vec3b>(ni_3, nj_3);
+		n++;
+	}
+	if (ni_4 >= 0 && ni_4 < imgRols && nj_4 >= 0 && nj_4 < imgCols){
+		res += (Vec3d)image.at<Vec3b>(ni_4, nj_4);
+		n++;
+	}
+
+	if (n == 0)
+		return Vec3d(-1, -1, -1);
+	else
+		return res / n;
+}
+

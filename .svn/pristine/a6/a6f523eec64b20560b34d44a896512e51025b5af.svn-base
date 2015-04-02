@@ -1,0 +1,551 @@
+#include <opencv2/opencv.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/objdetect/objdetect.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/core/core.hpp>
+
+#include <iostream>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string>
+#include <math.h>
+#include <direct.h>
+#include <fstream>
+#include "ml.h"
+#include <utility>
+#include <list>
+#include <io.h>
+#include <time.h>
+#include <algorithm>
+
+#include "SBE.h"
+
+#define ELLIPSOID_SIGMA		6 //4 //4.5
+#define ELLIPSOID_A			1
+#define ELLIPSOID_B			1
+#define ELLIPSOID_C			1.25
+#define EXCHANGE_FREQUENCY	5
+#define STUDY_NUM			20
+#define rndSize				49999
+
+#define CHECKPOINT			1/2 //3/4 // 2/3
+
+using namespace std;
+using namespace cv;
+
+int rndn = 0;
+int rnd3[rndSize];
+int rnd10[rndSize];
+int getrndn(){
+	rndn++;
+	if (rndn >= rndSize)
+		rndn = 0;
+	return rndn;
+}
+
+SBE::SBE(int img_rows, int img_cols)
+{
+	RNG rnd = theRNG();
+	for (int i = 0; i < rndSize; i++){
+		rnd3[i] = rnd(3) - 1;
+		rnd10[i] = rnd(10);
+	}
+
+	imgNums = 0;
+	imgRols = img_rows;
+	imgCols = img_cols;
+	for (int i = 0; i < imgRols * imgCols; i++)
+	{
+		codeData.push_back(vector<Vec3d>());
+		codeEllipsoid.push_back(vector<StructEllipsoid>());
+		classK.push_back(0);
+		minR.push_back(-1);
+		bgNums.push_back(0);
+	}
+
+	// initial
+	globalMinR = -1;
+}
+
+SBE::~SBE()
+{
+
+}
+
+// --------- Public --------------------------------------
+
+Mat SBE::Run(Mat &image){
+
+	Mat image_result = Mat::zeros(imgRols, imgCols, CV_8UC1);
+	imgNums++;
+
+	for (int i = 0; i < imgRols; i++) {
+		for (int j = 0; j < imgCols; j++) {
+			
+			// for each pixel
+			int pixel = i * imgCols + j;
+			if (codeEllipsoid[pixel].size() == 0){
+				// INITIAL THE PIXEL
+				// 1. prepare data
+				if (codeData[pixel].size() == 0){
+					// create initial data
+					vector<Vec2f> npointoffset;
+					npointoffset.push_back(Vec2f(0,0));			// itself
+					GetNeighborPosOffset(1, 8, npointoffset);	// ceil to one around
+					//GetNeighborPosOffset(2, 16, npointoffset);	// ceil to two around
+					for (int n = 0; n < npointoffset.size(); n++){
+						int newi = i + (int)(npointoffset[n][0]);
+						int newj = j + (int)(npointoffset[n][1]);
+						if (newi >= 0 && newi < imgRols && newj >= 0 && newj < imgCols){
+							Vec3d temp = (Vec3d)image.at<Vec3b>(newi, newj);
+							if (!DetectCombine(codeData[pixel], temp)){
+								if (n < 9)
+									classK[pixel]++;
+								codeData[pixel].push_back(temp);		// 0: itself; 1-8: one round; 9-24: two round
+							}
+						}
+					}
+				}
+				else{
+					// add new data
+					Vec3d temp = (Vec3d)image.at<Vec3b>(i, j);
+					if (!DetectCombine(codeData[pixel], temp))
+						codeData[pixel].push_back(temp);				// only add itself
+				}
+
+				// 2. calculate ellipsoid
+				CreateEllipsoid(classK[pixel], minR[pixel], codeData[pixel], codeEllipsoid[pixel]);
+			}
+			else{
+				// DETECT THE PIXEL
+				Vec3d temp = (Vec3d)image.at<Vec3b>(i, j);
+				int elid = DetectPixel(codeEllipsoid[pixel], temp);
+				if (elid >= 0){
+					// is background
+					image_result.at<unsigned char>(i, j) = 0;
+					bgNums[pixel]++;
+					// update ellipsoid
+					UpdateEllipsoid(temp, codeEllipsoid[pixel][elid]);
+					// transmit with neighbors
+					if (imgNums % EXCHANGE_FREQUENCY == 0){
+						// - get neighbor
+						int pixel_nbr = GetNeighborPos(i, j, imgRols, imgCols);
+						int nsize = codeEllipsoid[pixel_nbr].size();
+						int msize = codeEllipsoid[pixel].size();
+						if (nsize > 0 && msize > 0){
+							int el_nbr = getRandomNum(nsize);
+							int el_me = getRandomNum(msize);
+							Vec3d nbr_mu, me_mu;
+							nbr_mu[0] = codeEllipsoid[pixel_nbr][el_nbr].mu[0];
+							nbr_mu[1] = codeEllipsoid[pixel_nbr][el_nbr].mu[1];
+							nbr_mu[2] = codeEllipsoid[pixel_nbr][el_nbr].mu[2];
+							me_mu[0] = codeEllipsoid[pixel][el_me].mu[0];
+							me_mu[1] = codeEllipsoid[pixel][el_me].mu[1];
+							me_mu[2] = codeEllipsoid[pixel][el_me].mu[2];
+							// - from neighbor
+							UpdateNeighbor(codeEllipsoid[pixel], nbr_mu, minR[pixel]);
+							// - to neighbor
+							UpdateNeighbor(codeEllipsoid[pixel_nbr], me_mu, minR[pixel_nbr]);
+						}
+					}
+
+					// check useless ellipsoid and delete it
+					DeleteEllipsoid(codeEllipsoid[pixel], bgNums[pixel]);
+				}
+				else{
+					// is foreground
+					image_result.at<unsigned char>(i, j) = 255;
+				}
+
+			}
+
+		}
+	}
+	return image_result;
+
+}
+
+// --------- Private --------------------------------------
+
+int SBE::getRandomNum(int ssize){
+
+	if (ssize == 0){
+		return rnd10[getrndn()];;
+	}
+	else if (ssize / 10 > 0){
+		int ti = ssize / 10;
+		int reti = getRandomNum(ti);
+		int gi = ssize % 10;
+		int regi = getRandomNum(gi);
+		return reti * 10 + regi;
+	}
+	else{
+		int re;
+		do {
+			re = rnd10[getrndn()];
+		} while ( re >= ssize );
+		return re;
+	}
+
+}
+
+int SBE::GetNeighborPos(int i, int j, int rows, int cols){
+
+	Vec2i re;
+
+	re[0] = rnd3[getrndn()] + i;
+	re[1] = rnd3[getrndn()] + j;
+	while ((re[0] * cols + re[1]) < 0 || (re[0] * cols + re[1]) > rows * cols - 1 || (re[0] == 0 && re[1] == 0)){
+		re[0] = rnd3[getrndn()] + i;
+		re[1] = rnd3[getrndn()] + j;
+	}
+
+	return re[0] * cols + re[1];
+
+}
+
+void SBE::GetNeighborPosOffset(int r, int n, vector<Vec2f> &npointoffset){
+
+	float perangle = 6.2832 / n;
+	// for each point
+	for (int i = 0; i < n; i++){
+		float px = r * sin(perangle * i);
+		float py = r * cos(perangle * i);
+		npointoffset.push_back(Vec2f(px, py));
+	}
+
+}
+
+int SBE::GetCloseMean(int k, Vec3d temp_data, vector<Vec3d> &mu){
+
+	int re = 0;
+	float dist = pow((mu[0][0] - temp_data[0]), 2) + pow((mu[0][1] - temp_data[1]), 2) + pow((mu[0][2] - temp_data[2]), 2);
+	for (int i = 1; i < k; i++){
+		float tempdist = pow((mu[i][0] - temp_data[0]), 2) + pow((mu[i][1] - temp_data[1]), 2) + pow((mu[i][2] - temp_data[2]), 2);
+		if (tempdist < dist){
+			dist = tempdist;
+			re = i;
+		}
+	}
+	return re;
+
+}
+
+float SBE::GetMinAxis(StructEllipsoid &el){
+
+	float remin = el.a;
+	if (el.b < remin)
+		remin = el.b;
+	if (el.c < remin)
+		remin = el.c;
+
+	if (globalMinR > remin || globalMinR < 0)
+		globalMinR = remin;
+
+	return remin;
+
+}
+
+bool SBE::DetectCombine(vector<Vec3d> &vec_pixel, Vec3d now_pixel){
+
+	int ss = vec_pixel.size();
+	for (int i = 0; i < ss; i++){
+		if (now_pixel[0] == vec_pixel[i][0] && now_pixel[1] == vec_pixel[i][1] && now_pixel[2] == vec_pixel[i][2]){
+			return true;
+		}
+	}
+	return false;
+}
+
+bool SBE::CheckPixelData_Variance(vector<Vec3d> &input_data, vector<Vec3d> &output_data){
+
+	// calculate ellipsoid
+	StructEllipsoid el;
+	el.n = 0;
+	el.hit = 0;
+	el.sigmax[0] = el.sigmax[1] = el.sigmax[2] = 0;
+	el.sigmax2[0] = el.sigmax2[1] = el.sigmax2[2] = 0;
+
+	int ss = input_data.size();
+	for (int j = 0; j < ss; j++){
+		el.n++;
+		el.sigmax[0] += input_data[j][0];
+		el.sigmax[1] += input_data[j][1];
+		el.sigmax[2] += input_data[j][2];
+		el.sigmax2[0] += input_data[j][0] * input_data[j][0];
+		el.sigmax2[1] += input_data[j][1] * input_data[j][1];
+		el.sigmax2[2] += input_data[j][2] * input_data[j][2];
+	}
+	if (CalcEllipsoid(el)){
+		// check each point must in the n*variance
+		for (int j = 0; j < ss; j++){
+			float dist = pow((input_data[j][0] - el.mu[0]) / (el.a * CHECKPOINT), 2) +
+				pow((input_data[j][1] - el.mu[1]) / (el.b * CHECKPOINT), 2) +
+				pow((input_data[j][2] - el.mu[2]) / (el.c * CHECKPOINT), 2);
+			if (dist < 1)
+				output_data.push_back(input_data[j]);
+		}
+		return true;
+	}
+	return false;
+
+}
+
+bool SBE::CheckPixelData_Medium(vector<Vec3d> &input_data, vector<Vec3d> &output_data){
+
+	// calculate 
+	const int ss = input_data.size();
+	double *array_x = new double[ss];
+	double *array_y = new double[ss];
+	double *array_z = new double[ss];
+	for (int i = 0; i < ss; i++){
+		array_x[i] = input_data[i][0];
+		array_y[i] = input_data[i][1];
+		array_z[i] = input_data[i][2];
+	}
+
+	sort(array_x, array_x + ss);
+	sort(array_y, array_y + ss);
+	sort(array_z, array_z + ss);
+
+	int tp = floor((ss - 1) / 2);
+	double med[3] = { array_x[tp], array_y[tp], array_z[tp] };
+
+	for (int i = 0; i < ss; i++){
+		array_x[i] = abs(array_x[i] - med[0]);
+		array_y[i] = abs(array_y[i] - med[1]);
+		array_z[i] = abs(array_z[i] - med[2]);
+	}
+
+	sort(array_x, array_x + ss);
+	sort(array_y, array_y + ss);
+	sort(array_z, array_z + ss);
+
+	double K = 1.4826;
+	double mad[3] = { array_x[tp], array_y[tp], array_z[tp] };
+	double sigma[3] = { mad[0] * K, mad[1] * K, mad[2] * K };
+
+	// detect
+	for (int i = 0; i < ss; i++){
+		if ( (input_data[i][0] > (med[0] - sigma[0])) && (input_data[i][0] < (med[0] + sigma[0])) ){
+			if ((input_data[i][1] > (med[1] - sigma[1])) && (input_data[i][1] < (med[1] + sigma[1]))){
+				if ((input_data[i][2] > (med[2] - sigma[2])) && (input_data[i][2] < (med[2] + sigma[2]))){
+					output_data.push_back(input_data[i]);
+				}
+			}
+		}
+	}
+	if (output_data.size() > 0)
+		return true;
+	else
+		return false;
+}
+
+bool SBE::CreateEllipsoid(int &k, float &minr, vector<Vec3d> &code_data, vector<StructEllipsoid> &code_ellipsoid){
+
+	// Make Sure Only Use The Data
+	if (code_data.size() < 4)
+		return false;
+	vector<Vec3d> datas;
+	
+	// The method 1
+	/*if (!CheckPixelData_Variance(code_data, datas))
+		return false;*/
+	// The method 2
+	if (!CheckPixelData_Medium(code_data, datas))
+		return false;
+
+	if (datas.size() < k)
+		k = datas.size();
+
+	// calculate mu
+	vector<Vec3d> mu;
+	vector<vector<Vec3d>> sdata;
+	vector<StructEllipsoid> sel;
+	for (int i = 0; i < k; i++){
+		mu.push_back(datas[i]);
+		sdata.push_back(vector<Vec3d>());
+		sdata[i].push_back(datas[i]);
+		sel.push_back(StructEllipsoid());
+	}
+	// split data
+	for (int i = k; i < datas.size(); i++){
+		int tempp = GetCloseMean(k, datas[i], mu);
+		sdata[tempp].push_back(datas[i]);
+	}
+
+	// create ellipsoid
+	int hasel = 0;
+	for (int i = 0; i < k; i++){
+		// for each ellipsoid
+		int ss = sdata[i].size();
+		if (ss > 3){
+
+			// calculate ellipsoid
+			StructEllipsoid el;
+			el.n = 0;
+			el.hit = 0;
+			el.sigmax[0] = el.sigmax[1] = el.sigmax[2] = 0;
+			el.sigmax2[0] = el.sigmax2[1] = el.sigmax2[2] = 0;
+			for (int j = 0; j < ss; j++){
+				el.n++;
+				el.sigmax[0] += sdata[i][j][0];
+				el.sigmax[1] += sdata[i][j][1];
+				el.sigmax[2] += sdata[i][j][2];
+				el.sigmax2[0] += sdata[i][j][0] * sdata[i][j][0];
+				el.sigmax2[1] += sdata[i][j][1] * sdata[i][j][1];
+				el.sigmax2[2] += sdata[i][j][2] * sdata[i][j][2];
+			}
+			if (CalcEllipsoid(el)){
+				// Legal Ellipsoid
+				sel[i] = el;
+				hasel++;
+				// update minR
+				if (minr < 0)
+					minr = GetMinAxis(el);
+				else{
+					float minnow = GetMinAxis(el);
+					if (minr > minnow)
+						minr = minnow;
+				}
+			}
+		}
+	}
+
+	// check result
+	if (hasel > 0){
+		for (int i = 0; i < k; i++){
+			if (sel[i].n == 0){
+				CreateSphere(sel[i], sdata[i][0], minr);
+			}
+		}
+		code_ellipsoid = sel;
+		return true;
+	}
+	else if ( imgNums > STUDY_NUM ){
+		// can't have ellipsoid a long time
+		for (int i = 0; i < k; i++){
+			if (sel[i].n == 0){
+				CreateSphere(sel[i], sdata[i][0], globalMinR * 5);
+			}
+		}
+		code_ellipsoid = sel;
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+bool SBE::CalcEllipsoid(StructEllipsoid &el){
+
+	// re-calculate
+	el.mu[0] = el.sigmax[0] / el.n;
+	el.mu[1] = el.sigmax[1] / el.n;
+	el.mu[2] = el.sigmax[2] / el.n;
+
+	el.cov[0][0] = el.mu[0] * el.mu[0] - el.sigmax2[0] / el.n;
+	el.cov[0][1] = el.mu[0] * el.mu[1] - el.sigmax2[0] / el.n;
+	el.cov[0][2] = el.mu[0] * el.mu[2] - el.sigmax2[0] / el.n;
+	el.cov[1][0] = el.mu[1] * el.mu[0] - el.sigmax2[1] / el.n;
+	el.cov[1][1] = el.mu[1] * el.mu[1] - el.sigmax2[1] / el.n;
+	el.cov[1][2] = el.mu[1] * el.mu[2] - el.sigmax2[1] / el.n;
+	el.cov[2][0] = el.mu[2] * el.mu[0] - el.sigmax2[2] / el.n;
+	el.cov[2][1] = el.mu[2] * el.mu[1] - el.sigmax2[2] / el.n;
+	el.cov[2][2] = el.mu[2] * el.mu[2] - el.sigmax2[2] / el.n;
+
+	el.a = sqrt(abs(el.cov[0][0])) * ELLIPSOID_SIGMA * ELLIPSOID_A;
+	el.b = sqrt(abs(el.cov[1][1])) * ELLIPSOID_SIGMA * ELLIPSOID_B;
+	el.c = sqrt(abs(el.cov[2][2])) * ELLIPSOID_SIGMA * ELLIPSOID_C;
+
+	if (el.a == 0 || el.b == 0 || el.c == 0)
+		return false;
+
+	return true;
+}
+
+int SBE::DetectPixel(vector<StructEllipsoid> &code_ellipsoid, Vec3d code_data){
+
+	int ss = code_ellipsoid.size();
+	for (int i = 0; i < ss; i++){
+		float dist = pow((code_data[0] - code_ellipsoid[i].mu[0]) / code_ellipsoid[i].a, 2) +
+			pow((code_data[1] - code_ellipsoid[i].mu[1]) / code_ellipsoid[i].b, 2) +
+			pow((code_data[2] - code_ellipsoid[i].mu[2]) / code_ellipsoid[i].c, 2);
+		if (dist < 1)
+			return i;
+	}
+	return -1;
+}
+
+bool SBE::UpdateNeighbor(vector<StructEllipsoid> &code_ellipsoid, Vec3d code_mu, float minr){
+
+	int meid = DetectPixel(code_ellipsoid, code_mu);
+	if (meid >= 0){
+		// update excited ellipsoid
+		UpdateEllipsoid(code_mu, code_ellipsoid[meid]);
+	}
+	else{
+		// add a new ellipsoid
+		StructEllipsoid el;
+		CreateSphere(el, code_mu, minr);
+		code_ellipsoid.push_back(el);
+	}
+
+	return true;
+}
+
+bool SBE::CreateSphere(StructEllipsoid &sel, Vec3d sdata, float minr){
+
+	sel.n = 2;
+	sel.hit = 0;
+	sel.sigmax[0] = sdata[0] * 2;
+	sel.sigmax[1] = sdata[1] * 2;
+	sel.sigmax[2] = sdata[2] * 2;
+	sel.sigmax2[0] = sdata[0] * sdata[0] * 2;
+	sel.sigmax2[1] = sdata[1] * sdata[1] * 2;
+	sel.sigmax2[2] = sdata[2] * sdata[2] * 2;
+	sel.mu[0] = sdata[0];
+	sel.mu[1] = sdata[1];
+	sel.mu[2] = sdata[2];
+	sel.a = sel.b = sel.c = minr;
+
+	return true;
+}
+
+bool SBE::UpdateEllipsoid(Vec3d data_now, StructEllipsoid &code_ellipsoid){
+	
+	StructEllipsoid el;
+
+	el.n = code_ellipsoid.n + 1;
+	el.hit = code_ellipsoid.hit + 1;
+	el.sigmax[0] = code_ellipsoid.sigmax[0] + data_now[0];
+	el.sigmax[1] = code_ellipsoid.sigmax[1] + data_now[1];
+	el.sigmax[2] = code_ellipsoid.sigmax[2] + data_now[2];
+	el.sigmax2[0] = code_ellipsoid.sigmax2[0] + data_now[0] * data_now[0];
+	el.sigmax2[1] = code_ellipsoid.sigmax2[1] + data_now[1] * data_now[1];
+	el.sigmax2[2] = code_ellipsoid.sigmax2[2] + data_now[2] * data_now[2];
+	
+	if (CalcEllipsoid(el)){
+		code_ellipsoid = el;
+		return true;
+	}
+	else
+		return false;
+
+}
+
+bool SBE::DeleteEllipsoid(vector<StructEllipsoid> &code_ellipsoid, int bg_nums){
+
+	int ss = code_ellipsoid.size();
+	for (int i = 0; i < ss; i++){
+		float rate = (float)(code_ellipsoid)[i].hit / (float)bg_nums;
+		if (rate < 0.01 && bg_nums > 100){
+			code_ellipsoid.erase(code_ellipsoid.begin() + i);
+			ss--;
+			i--;
+		}
+	}
+	return true;
+
+}
+
